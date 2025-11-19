@@ -172,12 +172,12 @@ let board = null;
 let game = new Chess();
 let peer = null;
 let conn = null;
-let myColor = null; // 'w' or 'b' – will be decided randomly when both are connected
+let myColor = null; // 'w' or 'b' – decided ONLY by host
 let pendingMove = null;
 
 const $status = $('#gameStatus');
-const $whitePlayer = $('#white-player');
-const $blackPlayer = $('#black-player');
+const $whitePlayer = $('#white-player .player-name');
+const $blackPlayer = $('#black-player .player-name');
 const $undoBtn = $('#undoBtn');
 const $modal = $('#promotionModal');
 const $chatMessages = $('#chatMessages');
@@ -200,7 +200,7 @@ function initBoard(orientation = 'white') {
 }
 
 function onDragStart(source, piece) {
-    if (game.game_over() || game.turn() !== myColor ||
+    if (!myColor || game.game_over() || game.turn() !== myColor ||
         (myColor === 'w' && piece.search(/^b/) !== -1) ||
         (myColor === 'b' && piece.search(/^w/) !== -1)) {
         return false;
@@ -209,12 +209,12 @@ function onDragStart(source, piece) {
 
 function onDrop(source, target) {
     pendingMove = { from: source, to: target };
-    let move = game.move({ from: source, to: target, promotion: 'q' }); // temporary for validation
+    let move = game.move({ from: source, to: target, promotion: 'q' });
     if (move === null) {
         pendingMove = null;
         return 'snapback';
     }
-    if (move.flags.includes('p')) { // promotion
+    if (move.flags.includes('p')) {
         game.undo();
         showPromotionModal();
         return;
@@ -251,7 +251,10 @@ function updateAll() {
 }
 
 function updateTurnControl() {
-    if (board) board.draggable = game.in_game() && !game.game_over() && game.turn() === myColor;
+    if (board) {
+        const canMove = myColor && !game.game_over() && game.turn() === myColor;
+        board.draggable = canMove;
+    }
 }
 
 function updateStatus() {
@@ -272,8 +275,8 @@ function updateStatus() {
 }
 
 function updateActivePlayer() {
-    $whitePlayer.toggleClass('active', game.turn() === 'w');
-    $blackPlayer.toggleClass('active', game.turn() === 'b');
+    $('#white-player').toggleClass('active', game.turn() === 'w');
+    $('#black-player').toggleClass('active', game.turn() === 'b');
 }
 
 function updateMoveHistoryDisplay() {
@@ -307,11 +310,41 @@ $chatInput.on('keypress', e => {
     }
 });
 
-// ====================== ONLINE LOGIC (RANDOM COLORS + CHAT) ======================
-let iAmHost = false;
+// ====================== COLOR ASSIGNMENT (HOST ONLY) ======================
+function decideAndSendColors() {
+    const seed = peer.id + conn.peer;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    const hostIsWhite = (Math.abs(hash) % 2) === 0;
+
+    const assignment = {
+        type: 'colorAssignment',
+        youAre: hostIsWhite ? 'w' : 'b',      // for the guest
+        opponentIs: hostIsWhite ? 'b' : 'w'   // for the guest
+    };
+
+    // Send to guest
+    conn.send(assignment);
+
+    // Assign to host locally
+    myColor = hostIsWhite ? 'w' : 'b';
+
+    // Now both players can initialize their board
+    const orientation = myColor === 'w' ? 'white' : 'black';
+    initBoard(orientation);
+    if (myColor === 'b') board.flip();
+
+    addMessage(`Random colors assigned — you are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
+}
+
+// ====================== PEERJS CONNECTION ======================
+let isHost = false;
 
 $('#createRoom').click(() => {
-    iAmHost = true;
+    isHost = true;
     peer = new Peer();
     peer.on('open', id => {
         $('#roomInfo').text(`Room ID: ${id} — Share with friend!`).show();
@@ -320,7 +353,6 @@ $('#createRoom').click(() => {
     peer.on('connection', incoming => {
         conn = incoming;
         setupConnection();
-        decideRandomColors();
     });
 });
 
@@ -334,48 +366,25 @@ $('#joinRoom').click(() => {
     });
 });
 
-function decideRandomColors() {
-    // Simple deterministic "random" using the two peer IDs
-    const seed = peer.id + conn.peer;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    const rand = Math.abs(hash) % 2;
-    const hostIsWhite = rand === 0;
-    const whiteId = hostIsWhite ? peer.id : conn.peer;
-    const blackId = hostIsWhite ? conn.peer : peer.id;
-
-    // Tell both players their color
-    conn.send({
-        type: 'colorAssignment',
-        youAre: peer.id === whiteId ? 'w' : 'b',
-        opponentName: peer.id === whiteId ? $('#black-player .player-name').text() : $('#white-player .player-name').text()
-    });
-    assignMyColor(peer.id === whiteId ? 'w' : 'b');
-}
-
-function assignMyColor(color) {
-    myColor = color;
-    const orientation = myColor === 'w' ? 'white' : 'black';
-    initBoard(orientation);
-    if (myColor === 'b') board.flip();
-}
-
 function setupConnection() {
     conn.on('open', () => {
         $('#setupScreen').hide();
         $('#gameScreen').show();
         $('#waiting').hide();
 
-        // Host decides colors as soon as connection opens
-        if (iAmHost) decideRandomColors();
-
-        addMessage('Connected! Waiting for color assignment...', false);
+        if (isHost) {
+            // Host decides colors immediately when connection is open
+            setTimeout(decideAndSendColors, 300); // tiny delay ensures both sides are ready
+        }
     });
 
     conn.on('data', data => {
         if (data.type === 'colorAssignment') {
-            assignMyColor(data.youAre);
-            addMessage('Game started – you play as ' + (data.youAre === 'w' ? 'White ♔' : 'Black ♛'), false);
+            myColor = data.youAre;
+            const orientation = myColor === 'w' ? 'white' : 'black';
+            initBoard(orientation);
+            if (myColor === 'b') board.flip();
+            addMessage(`Game started — you are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
         }
         else if (data.type === 'move') {
             game.load(data.fen);
@@ -386,8 +395,7 @@ function setupConnection() {
             game.reset();
             board.position('start');
             updateAll();
-            // New game → new random colors
-            if (iAmHost) setTimeout(decideRandomColors, 300);
+            if (isHost) setTimeout(decideAndSendColors, 400);
         }
         else if (data.type === 'chat') {
             addMessage(data.text, false);
@@ -400,9 +408,9 @@ function setupConnection() {
     });
 }
 
-// Buttons
+// ====================== BUTTONS ======================
 $('#newGame').click(() => {
-    if (confirm('Start a new game? Current game will be lost.')) {
+    if (confirm('Start a new game?')) {
         game.reset();
         board.position('start');
         if (conn && conn.open) conn.send({ type: 'reset' });
