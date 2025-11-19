@@ -172,7 +172,7 @@ let board = null;
 let game = new Chess();
 let peer = null;
 let conn = null;
-let myColor = null;          // 'w' or 'b'
+let myColor = null;
 let pendingMove = null;
 let isHost = false;
 
@@ -192,9 +192,10 @@ function initBoard(orientation = 'white') {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
         onDragStart: onDragStart,
         onDrop: onDrop,
-        onSnapEnd: () => board.position(game.fen())
+        onSnapEnd: () => {}  // We control position manually now
     };
     board = Chessboard('board', config);
+    board.position(game.fen());  // Initial position
     $('#chatColumn').show();
     updateTurnControl();
 }
@@ -234,8 +235,12 @@ function showPromotionModal() {
 }
 
 function finalizeMove(move) {
-    board.position(game.fen());
-    if (conn && conn.open) conn.send({ type: 'move', fen: game.fen() });
+    // Update local board ONLY for the player who moved
+    board.position(game.fen(), false);  // false = no animation from opponent perspective
+
+    if (conn && conn.open) {
+        conn.send({ type: 'move', fen: game.fen() });
+    }
     updateAll();
 }
 
@@ -278,9 +283,10 @@ function updateMoveHistoryDisplay() {
     const history = game.history();
     let html = '';
     for (let i = 0; i < history.length; i += 2) {
-        html += `${Math.floor(i/2)+1}. ${history[i]}`;
-        if (i+1 < history.length) html += ` ${history[i+1]}`;
-        if (i+2 < history.length) html += ' | ';
+        const moveNum = Math.floor(i / 2) + 1;
+        html += `${moveNum}. ${history[i]}`;
+        if (i + 1 < history.length) html += ` ${history[i + 1]}`;
+        if (i + 2 < history.length) html += ' | ';
     }
     $('#moveHistory').text(html || 'No moves yet');
 }
@@ -308,9 +314,8 @@ $chatInput.keypress(function(e) {
     }
 });
 
-// ====================== RANDOM COLOR ASSIGNMENT (HOST ONLY) ======================
+// ====================== RANDOM COLOR ASSIGNMENT ======================
 function assignRandomColors() {
-    // Deterministic random based on both peer IDs
     const seed = peer.id.localeCompare(conn.peer) < 0 ? peer.id + conn.peer : conn.peer + peer.id;
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
@@ -319,20 +324,18 @@ function assignRandomColors() {
     }
     const hostIsWhite = (Math.abs(hash) % 2) === 0;
 
-    const hostColor   = hostIsWhite ? 'w' : 'b';
-    const guestColor  = hostIsWhite ? 'b' : 'w';
+    const hostColor  = hostIsWhite ? 'w' : 'b';
+    const guestColor = hostIsWhite ? 'b' : 'w';
 
-    // 1. Tell the guest their color
     conn.send({ type: 'color', color: guestColor });
 
-    // 2. Set host's own color and initialize board
     myColor = hostColor;
     initBoard(myColor === 'w' ? 'white' : 'black');
     if (myColor === 'b') board.flip();
-    addMessage(`♔♛ Random colors assigned — You are ${myColor === 'w' ? 'White' : 'Black'}`, false);
+    addMessage(`♔♛ Random colors — You are ${myColor === 'w' ? 'White' : 'Black'}`, false);
 }
 
-// ====================== PEERJS CONNECTION ======================
+// ====================== PEERJS ======================
 $('#createRoom').click(() => {
     isHost = true;
     peer = new Peer();
@@ -363,14 +366,12 @@ function setupConnection() {
         $('#waiting').hide();
 
         if (isHost) {
-            // Host decides colors as soon as connection is fully open
             setTimeout(assignRandomColors, 700);
         }
     });
 
     conn.on('data', data => {
         if (data.type === 'color') {
-            // Guest receives their color
             myColor = data.color;
             initBoard(myColor === 'w' ? 'white' : 'black');
             if (myColor === 'b') board.flip();
@@ -378,7 +379,7 @@ function setupConnection() {
         }
         else if (data.type === 'move') {
             game.load(data.fen);
-            board.position(game.fen());
+            board.position(game.fen(), true);  // Animate for the receiver
             updateAll();
         }
         else if (data.type === 'reset') {
