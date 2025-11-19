@@ -172,12 +172,11 @@ let board = null;
 let game = new Chess();
 let peer = null;
 let conn = null;
-let myColor = null; // 'w' or 'b' – decided ONLY by host
+let myColor = null; // 'w' or 'b' – decided only by host
 let pendingMove = null;
+let isHost = false;
 
 const $status = $('#gameStatus');
-const $whitePlayer = $('#white-player .player-name');
-const $blackPlayer = $('#black-player .player-name');
 const $undoBtn = $('#undoBtn');
 const $modal = $('#promotionModal');
 const $chatMessages = $('#chatMessages');
@@ -236,12 +235,12 @@ function showPromotionModal() {
 function finalizeMove(move) {
     board.position(game.fen());
     if (conn && conn.open) {
-        conn.send({ type: 'move', san: move.san, fen: game.fen() });
+        conn.send({ type: 'move', fen: game.fen(), san: move.san });
     }
     updateAll();
 }
 
-// ====================== UI UPDATES ======================
+// ====================== UI ======================
 function updateAll() {
     updateStatus();
     updateActivePlayer();
@@ -251,10 +250,7 @@ function updateAll() {
 }
 
 function updateTurnControl() {
-    if (board) {
-        const canMove = myColor && !game.game_over() && game.turn() === myColor;
-        board.draggable = canMove;
-    }
+    if (board) board.draggable = myColor && !game.game_over() && game.turn() === myColor;
 }
 
 function updateStatus() {
@@ -280,7 +276,7 @@ function updateActivePlayer() {
 }
 
 function updateMoveHistoryDisplay() {
-    const history = game.history();
+    const history = game.history({ verbose: false });
     let html = '';
     for (let i = 0; i < history.length; i += 2) {
         html += `${Math.floor(i/2)+1}. ${history[i]}`;
@@ -296,62 +292,61 @@ function updateUndoButton() {
 
 // ====================== CHAT ======================
 function addMessage(text, fromMe = false) {
-    const msgDiv = $('<div>').addClass('message').toggleClass('me', fromMe).toggleClass('opponent', !fromMe).text(text);
-    $chatMessages.append(msgDiv);
+    const el = $('<div class="message">')
+        .text(text)
+        .toggleClass('me', fromMe)
+        .toggleClass('opponent', !fromMe);
+    $chatMessages.append(el);
     $chatMessages.scrollTop($chatMessages[0].scrollHeight);
 }
 
-$chatInput.on('keypress', e => {
-    if (e.which === 13 && $chatInput.val().trim()) {
-        const text = $chatInput.val().trim();
-        addMessage(text, true);
-        if (conn && conn.open) conn.send({ type: 'chat', text });
-        $chatInput.val('');
+$chatInput.keypress(function(e) {
+    if (e.which === 13 && this.value.trim()) {
+        const msg = this.value.trim();
+        addMessage(msg, true);
+        if (conn && conn.open) conn.send({ type: 'chat', text: msg });
+        this.value = '';
     }
 });
 
 // ====================== COLOR ASSIGNMENT (HOST ONLY) ======================
-function decideAndSendColors() {
+function assignRandomColors() {
+    // Deterministic "random" based on both Peer IDs
     const seed = peer.id + conn.peer;
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
         hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-        hash |= 0; // Convert to 32bit integer
+        hash |= 0;
     }
     const hostIsWhite = (Math.abs(hash) % 2) === 0;
 
-    const assignment = {
-        type: 'colorAssignment',
-        youAre: hostIsWhite ? 'w' : 'b',      // for the guest
-        opponentIs: hostIsWhite ? 'b' : 'w'   // for the guest
-    };
+    // Tell the guest what color they are
+    conn.send({
+        type: 'color',
+        yourColor: hostIsWhite ? 'b' : 'w'
+    });
 
-    // Send to guest
-    conn.send(assignment);
-
-    // Assign to host locally
+    // Host sets his own color
     myColor = hostIsWhite ? 'w' : 'b';
 
-    // Now both players can initialize their board
+    // Now initialise board for host
     const orientation = myColor === 'w' ? 'white' : 'black';
     initBoard(orientation);
     if (myColor === 'b') board.flip();
 
-    addMessage(`Random colors assigned — you are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
+    addMessage(`Random colors → You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
 }
 
-// ====================== PEERJS CONNECTION ======================
-let isHost = false;
-
+// ====================== PEERJS ======================
 $('#createRoom').click(() => {
     isHost = true;
     peer = new Peer();
     peer.on('open', id => {
-        $('#roomInfo').text(`Room ID: ${id} — Share with friend!`).show();
+        $('#roomInfo').text(`Room ID: ${id} — Share this!`).show();
         $('#waiting').show();
     });
-    peer.on('connection', incoming => {
-        conn = incoming;
+    peer.on('connection', c => {
+        conn = c;
         setupConnection();
     });
 });
@@ -372,19 +367,20 @@ function setupConnection() {
         $('#gameScreen').show();
         $('#waiting').hide();
 
+        // Host decides colors as soon as the guest connects
         if (isHost) {
-            // Host decides colors immediately when connection is open
-            setTimeout(decideAndSendColors, 300); // tiny delay ensures both sides are ready
+            setTimeout(assignRandomColors, 500); // small delay = 100% reliable
         }
     });
 
     conn.on('data', data => {
-        if (data.type === 'colorAssignment') {
-            myColor = data.youAre;
+        if (data.type === 'color') {
+            // Guest receives their color
+            myColor = data.yourColor;
             const orientation = myColor === 'w' ? 'white' : 'black';
             initBoard(orientation);
             if (myColor === 'b') board.flip();
-            addMessage(`Game started — you are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
+            addMessage(`Game started → You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
         }
         else if (data.type === 'move') {
             game.load(data.fen);
@@ -395,7 +391,7 @@ function setupConnection() {
             game.reset();
             board.position('start');
             updateAll();
-            if (isHost) setTimeout(decideAndSendColors, 400);
+            if (isHost) setTimeout(assignRandomColors, 500);
         }
         else if (data.type === 'chat') {
             addMessage(data.text, false);
@@ -403,7 +399,7 @@ function setupConnection() {
     });
 
     conn.on('close', () => {
-        alert('Opponent disconnected!');
+        alert('Opponent disconnected');
         location.reload();
     });
 }
@@ -420,7 +416,8 @@ $('#newGame').click(() => {
 
 $('#undoBtn').click(() => {
     if (game.history().length < 2) return;
-    game.undo(); game.undo();
+    game.undo();
+    game.undo();
     board.position(game.fen());
     if (conn && conn.open) conn.send({ type: 'move', fen: game.fen() });
     updateAll();
