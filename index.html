@@ -172,7 +172,7 @@ let board = null;
 let game = new Chess();
 let peer = null;
 let conn = null;
-let myColor = null; // 'w' or 'b' – decided only by host
+let myColor = null;          // 'w' or 'b'
 let pendingMove = null;
 let isHost = false;
 
@@ -184,6 +184,7 @@ const $chatInput = $('#chatInput');
 
 // ====================== BOARD ======================
 function initBoard(orientation = 'white') {
+    if (board) board.destroy();
     const config = {
         draggable: true,
         position: 'start',
@@ -234,9 +235,7 @@ function showPromotionModal() {
 
 function finalizeMove(move) {
     board.position(game.fen());
-    if (conn && conn.open) {
-        conn.send({ type: 'move', fen: game.fen(), san: move.san });
-    }
+    if (conn && conn.open) conn.send({ type: 'move', fen: game.fen() });
     updateAll();
 }
 
@@ -276,7 +275,7 @@ function updateActivePlayer() {
 }
 
 function updateMoveHistoryDisplay() {
-    const history = game.history({ verbose: false });
+    const history = game.history();
     let html = '';
     for (let i = 0; i < history.length; i += 2) {
         html += `${Math.floor(i/2)+1}. ${history[i]}`;
@@ -309,10 +308,10 @@ $chatInput.keypress(function(e) {
     }
 });
 
-// ====================== COLOR ASSIGNMENT (HOST ONLY) ======================
+// ====================== RANDOM COLOR ASSIGNMENT (HOST ONLY) ======================
 function assignRandomColors() {
-    // Deterministic "random" based on both Peer IDs
-    const seed = peer.id + conn.peer;
+    // Deterministic random based on both peer IDs
+    const seed = peer.id.localeCompare(conn.peer) < 0 ? peer.id + conn.peer : conn.peer + peer.id;
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
         hash = ((hash << 5) - hash) + seed.charCodeAt(i);
@@ -320,24 +319,20 @@ function assignRandomColors() {
     }
     const hostIsWhite = (Math.abs(hash) % 2) === 0;
 
-    // Tell the guest what color they are
-    conn.send({
-        type: 'color',
-        yourColor: hostIsWhite ? 'b' : 'w'
-    });
+    const hostColor   = hostIsWhite ? 'w' : 'b';
+    const guestColor  = hostIsWhite ? 'b' : 'w';
 
-    // Host sets his own color
-    myColor = hostIsWhite ? 'w' : 'b';
+    // 1. Tell the guest their color
+    conn.send({ type: 'color', color: guestColor });
 
-    // Now initialise board for host
-    const orientation = myColor === 'w' ? 'white' : 'black';
-    initBoard(orientation);
+    // 2. Set host's own color and initialize board
+    myColor = hostColor;
+    initBoard(myColor === 'w' ? 'white' : 'black');
     if (myColor === 'b') board.flip();
-
-    addMessage(`Random colors → You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
+    addMessage(`♔♛ Random colors assigned — You are ${myColor === 'w' ? 'White' : 'Black'}`, false);
 }
 
-// ====================== PEERJS ======================
+// ====================== PEERJS CONNECTION ======================
 $('#createRoom').click(() => {
     isHost = true;
     peer = new Peer();
@@ -367,20 +362,19 @@ function setupConnection() {
         $('#gameScreen').show();
         $('#waiting').hide();
 
-        // Host decides colors as soon as the guest connects
         if (isHost) {
-            setTimeout(assignRandomColors, 500); // small delay = 100% reliable
+            // Host decides colors as soon as connection is fully open
+            setTimeout(assignRandomColors, 700);
         }
     });
 
     conn.on('data', data => {
         if (data.type === 'color') {
             // Guest receives their color
-            myColor = data.yourColor;
-            const orientation = myColor === 'w' ? 'white' : 'black';
-            initBoard(orientation);
+            myColor = data.color;
+            initBoard(myColor === 'w' ? 'white' : 'black');
             if (myColor === 'b') board.flip();
-            addMessage(`Game started → You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
+            addMessage(`♔♛ Game started — You are ${myColor === 'w' ? 'White' : 'Black'}`, false);
         }
         else if (data.type === 'move') {
             game.load(data.fen);
@@ -391,7 +385,7 @@ function setupConnection() {
             game.reset();
             board.position('start');
             updateAll();
-            if (isHost) setTimeout(assignRandomColors, 500);
+            if (isHost) setTimeout(assignRandomColors, 700);
         }
         else if (data.type === 'chat') {
             addMessage(data.text, false);
@@ -416,8 +410,7 @@ $('#newGame').click(() => {
 
 $('#undoBtn').click(() => {
     if (game.history().length < 2) return;
-    game.undo();
-    game.undo();
+    game.undo(); game.undo();
     board.position(game.fen());
     if (conn && conn.open) conn.send({ type: 'move', fen: game.fen() });
     updateAll();
