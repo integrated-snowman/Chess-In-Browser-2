@@ -125,78 +125,107 @@
 </div>
 
 <script>
-    const PUBLIC_LOBBY_KEY = 'chess_public_games_v4';
+    const LOBBY_DATA_KEY = 'chess_lobby_v6';
     let board = null, game = new Chess(), peer = null, conn = null, myColor = null, pendingMove = null;
     let currentRoomId = null;
+    let myName = 'Player';
 
-    // ========= PUBLIC LOBBY (localStorage) =========
+    // ================== PURE CLIENT-SIDE LOBBY USING URL HASH ==================
+    function getLobbyData() {
+        try {
+            const hash = location.hash.slice(1);
+            if (!hash) return {};
+            const decoded = decodeURIComponent(hash);
+            if (!decoded.startsWith(LOBBY_DATA_KEY + '=')) return {};
+            const json = decoded.slice(LOBBY_DATA_KEY.length + 1);
+            return JSON.parse(json);
+        } catch(e) { return {}; }
+    }
+
+    function setLobbyData(data) {
+        const json = JSON.stringify(data);
+        const encoded = encodeURIComponent(json);
+        location.hash = LOBBY_DATA_KEY + '=' + encoded;
+    }
+
     function refreshLobby() {
-        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
+        const data = getLobbyData();
         const now = Date.now();
+        let changed = false;
 
-        // Clean old games
-        Object.keys(games).forEach(id => {
-            if (now - games[id].created > 8*60*1000) delete games[id];
+        // Clean expired rooms (8 minutes)
+        Object.keys(data).forEach(id => {
+            if (now - data[id].created > 8*60*1000) {
+                delete data[id];
+                changed = true;
+            }
         });
-        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
 
         const list = $('#openRooms');
         list.empty();
 
-        const entries = Object.entries(games)
+        const entries = Object.entries(data)
             .filter(([,g]) => now - g.created < 8*60*1000)
             .sort((a,b) => b[1].created - a[1].created);
 
         if (entries.length === 0) {
             list.html('<p><i>No public games right now — create one!</i></p>');
-            return;
+        } else {
+            entries.forEach(([id, g]) => {
+                const age = Math.round((now - g.created)/60000);
+                const card = $(`
+                    <div class="room" data-id="${id}">
+                        <h3>${g.name || 'Player'}'s Game</h3>
+                        <small>${age === 0 ? 'Just now' : age + ' min ago'}</small>
+                    </div>
+                `);
+                card.click(() => joinPublic(id));
+                list.append(card);
+            });
         }
 
-        entries.forEach(([id, g]) => {
-            const age = Math.round((now - g.created)/60000);
-            const card = $(`
-                <div class="room" data-id="${id}">
-                    <h3>${g.name || 'Player'}'s Game</h3>
-                    <small>${age === 0 ? 'Just now' : age + ' min ago'}</small>
-                </div>
-            `);
-            card.click(() => joinPublic(id));
-            list.append(card);
-        });
+        if (changed) setLobbyData(data); // prune expired
     }
 
-    function addToPublicLobby(id, name) {
-        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
-        games[id] = { name: name || 'Player', created: Date.now() };
-        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
+    function addMyselfToLobby(id, name) {
+        const data = getLobbyData();
+        data[id] = { name, created: Date.now() };
+        setLobbyData(data);
         currentRoomId = id;
     }
 
-    function removeFromPublicLobby(id) {
-        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
-        delete games[id];
-        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
+    function removeMyselfFromLobby() {
+        if (!currentRoomId) return;
+        const data = getLobbyData();
+        delete data[currentRoomId];
+        setLobbyData(data);
+        currentRoomId = null;
     }
 
-    setInterval(refreshLobby, 9000);
-    window.addEventListener('storage', refreshLobby);
-    refreshLobby(); // initial load
+    // Refresh on own hash change + every 7 seconds (in case someone else changed it)
+    window.addEventListener('hashchange', refreshLobby);
+    setInterval(refreshLobby, 7000);
+    refreshLobby();
 
-    // ========= BUTTONS =========
+    // ================== BUTTONS ==================
     $('#createPublic').click(() => {
-        const name = prompt('Your name (optional)') || 'Player';
+        myName = prompt('Your name (optional)', myName) || myName;
         peer = new Peer();
         peer.on('open', id => {
-            addToPublicLobby(id, name);
+            addMyselfToLobby(id, myName);
             setupHost();
         });
     });
 
     function joinPublic(hostId) {
+        // Immediately remove so nobody else joins the same game
+        const data = getLobbyData();
+        delete data[hostId];
+        setLobbyData(data);
+
         peer = new Peer();
         peer.on('open', () => {
             conn = peer.connect(hostId);
-            removeFromPublicLobby(hostId);
             setupConnection(false);
         });
     }
@@ -205,12 +234,12 @@
         const code = String(Math.floor(100000 + Math.random() * 900000));
         peer = new Peer(code);
         peer.on('open', id => {
-            alert(`Private Game Created!\n\nShare this code:\n\n${code}`);
+            alert(`Private Game Created!\n\nShare this code: ${code}`);
             setupHost();
         });
         peer.on('error', err => {
             if (err.type === 'unavailable-id') {
-                alert('Code taken — trying a new one...');
+                alert('Code already taken — trying again...');
                 $('#createPrivate').click();
             }
         });
@@ -218,24 +247,21 @@
 
     $('#joinPrivate').click(() => {
         const code = $('#privateCode').val().trim();
-        if (!/^\d{6}$/.test(code)) {
-            alert('Enter a valid 6-digit code');
-            return;
-        }
+        if (!/^\d{6}$/.test(code)) return alert('Enter a valid 6-digit code');
         peer = new Peer();
         peer.on('open', () => {
             conn = peer.connect(code);
             setupConnection(false);
         });
-        peer.on('error', () => alert('Invalid code or player left'));
+        peer.on('error', () => alert('Invalid code or game no longer exists'));
     });
 
-    // ========= GAME CORE =========
+    // ================== GAME CORE (unchanged) ==================
     function setupHost() {
         peer.on('connection', inc => {
             conn = inc;
+            removeMyselfFromLobby(); // host removes own listing once someone joins
             setupConnection(true);
-            if (currentRoomId) removeFromPublicLobby(currentRoomId);
         });
         $('#lobby').hide();
         $('#gameArea').addClass('show');
@@ -252,9 +278,8 @@
                 myColor = hostWhite ? 'w' : 'b';
                 conn.send({ type: 'color', color: hostWhite ? 'b' : 'w' });
             }
-
             initBoard();
-            addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White ♔':'Black ♛'}` : 'Waiting...'));
+            addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White ♔':'Black ♛'}` : 'Assigning color...'));
         });
 
         conn.on('data', data => {
@@ -296,7 +321,6 @@
         pendingMove = {from: src, to: tgt};
         const move = game.move({from: src, to: tgt, promotion: 'q'});
         if (!move) return 'snapback';
-
         if (move.flags.includes('p')) {
             game.undo();
             $('#promotionModal').show();
@@ -320,15 +344,17 @@
         let txt = game.in_checkmate() ? `Checkmate! ${game.turn()==='w'?'Black':'White'} wins!`
                  : game.in_draw() ? 'Draw!'
                  : (game.turn()==='w'?'White':'Black') + "'s turn" + (game.in_check()?' (check)' : '');
-
         $('#status').text(txt);
         $('#white').toggleClass('active', game.turn() === 'w');
         $('#black').toggleClass('active', game.turn() === 'b');
         $('#undoBtn').prop('disabled', game.history().length < 2 || game.game_over());
 
-        const h = game.history();
+        const h = game.history({verbose:true});
         let hist = '';
-        for (let i = 0; i < h.length; i += 2) hist += `${Math.floor(i/2)+1}. ${h[i]} ${i+1 < h.length ? h[i+1] : ''}  `;
+        for (let i = 0; i < h.length; i += 2) {
+            hist += `${Math.floor(i/2)+1}. ${h[i].san}`;
+            if (i+1 < h.length) hist += ` ${h[i+1].san} `;
+        }
         $('#moveHistory').text(hist || 'No moves yet');
     }
 
@@ -345,19 +371,19 @@
         }
     });
 
-    $('#newGame').click(() => confirm('New game?') && (game.reset(), board.start(), conn?.send({type:'reset'}), updateAll()));
+    $('#newGame').click(() => confirm('Start a new game?') && (game.reset(), board.start(), conn?.send({type:'reset'}), updateAll()));
     $('#undoBtn').click(() => {
         if (game.history().length >= 2) {
             game.undo(); game.undo();
             board.position(game.fen());
-            conn?.send({type: 'move', fen: game.fen()});
+            if (conn) conn.send({type: 'move', fen: game.fen()});
             updateAll();
         }
     });
     $('#flip').click(() => board.flip());
 
-    // Start lobby refresh
-    refreshLobby();
+    // Cleanup when leaving
+    window.addEventListener('beforeunload', removeMyselfFromLobby);
 </script>
 </body>
 </html>
