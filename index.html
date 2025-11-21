@@ -3,383 +3,361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Game - Online Multiplayer</title>
+    <title>♔ Chess Online • Public & Private • GitHub Pages</title>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .game-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            max-width: 1200px;
-            width: 100%;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 30px;
-        }
-        .left-column { flex: 1; min-width: 300px; }
-        .right-column { width: 320px; }
-        h1 { text-align: center; color: #333; margin-bottom: 10px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
-        .players-info { display: flex; justify-content: space-between; margin-bottom: 20px; gap: 15px; }
-        .player { flex: 1; text-align: center; padding: 15px; background: linear-gradient(145deg, #f0f0f0, #e0e0e0);
-            border-radius: 12px; border: 3px solid transparent; transition: all 0.3s ease; }
-        .player.active { border-color: #4CAF50; transform: scale(1.05); box-shadow: 0 10px 25px rgba(76,175,80,0.3); }
-        .player-name { font-size: 1.4em; font-weight: bold; margin-bottom: 8px; color: #333; }
-        .player-piece { font-size: 2.8em; }
-        #board { width: 500px; height: 500px; margin: 0 auto 20px; border-radius: 10px; box-shadow: 0 15px 35px rgba(0,0,0,0.2); }
-        .game-status { text-align: center; font-size: 1.3em; font-weight: bold; margin-bottom: 15px; min-height: 40px; padding: 12px;
-            background: rgba(255,255,255,0.8); border-radius: 10px; }
-        .controls { text-align: center; margin-bottom: 20px; }
-        button {
-            background: linear-gradient(145deg, #4CAF50, #45a049); color: white; border: none;
-            padding: 12px 24px; font-size: 1.1em; border-radius: 25px; cursor: pointer; margin: 5px;
-            transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(76,175,80,0.4);
-        }
-        button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(76,175,80,0.6); }
-        button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
-        button#undoBtn { background: linear-gradient(145deg, #ff9800, #e68900); box-shadow: 0 5px 15px rgba(255,152,0,0.4); }
-        .notation { padding: 12px; background: #f8f8f8; border-radius: 10px; font-family: monospace; font-size: 1.1em; text-align: center; }
-        #setupScreen { text-align: center; margin-bottom: 30px; width: 100%; }
-        #setupScreen input { padding: 12px; font-size: 1.2em; width: 200px; margin: 10px; border-radius: 10px; border: 2px solid #ddd; }
-        #roomInfo { font-size: 1.8em; font-weight: bold; color: #4CAF50; margin: 20px; }
-        #waiting { margin-top:20px; color:#ff9800; font-weight:bold; display:none; font-size:1.3em; }
-        #promotionModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85);
-            justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 20px; text-align: center; }
-        .promotion-piece { font-size: 5em; margin: 0 20px; cursor: pointer; transition: transform .2s; }
-        .promotion-piece:hover { transform: scale(1.2); }
-        .chat-box { background: #f8f9fa; border-radius: 12px; padding: 15px; height: 400px; display: flex; flex-direction: column;
-            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1); }
-        #chatMessages { flex: 1; overflow-y: auto; margin-bottom: 10px; padding-right: 8px; }
-        .message { margin: 6px 0; padding: 8px 12px; border-radius: 15px; max-width: 80%; }
-        .message.me { background: #4CAF50; color: white; align-self: flex-end; margin-left: auto; }
-        .message.opponent { background: #e0e0e0; align-self: flex-start; }
-        #chatInput { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 20px; font-size: 1em; }
-        @media (max-width: 968px) {
-            .game-container { flex-direction: column; }
-            #board { width: 90vw; height: 90vw; max-width: 420px; max-height: 420px; }
-            .right-column { width: 100%; }
+        :root { --primary: #4CAF50; --accent: #667eea; --dark: #333; --light: #f9f9fa; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin:0; padding:20px; min-height:100vh;
+               background: linear-gradient(135deg, var(--accent) 0%, #764ba2 100%); color:var(--dark); }
+        .container { max-width:1350px; margin:0 auto; background:rgba(255,255,255,0.97); border-radius:20px;
+                     padding:30px; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+        h1 { text-align:center; font-size:3.8em; margin:0 0 10px; text-shadow:2px 2px 6px rgba(0,0,0,0.2); }
+        h2 { text-align:center; color:#555; margin-bottom:40px; }
+
+        #lobby { text-align:center; }
+        .actions { display:flex; justify-content:center; gap:30px; flex-wrap:wrap; margin:50px 0; }
+        button.big { padding:18px 50px; font-size:1.5em; border:none; border-radius:50px; cursor:pointer;
+                     background:var(--primary); color:white; box-shadow:0 10px 30px rgba(76,175,80,0.5);
+                     transition:all .3s; }
+        button.big:hover { transform:translateY(-5px); box-shadow:0 18px 40px rgba(76,175,80,0.7); }
+
+        .private-section { margin:40px auto; max-width:500px; text-align:center; }
+        .private-section input { padding:16px; font-size:1.4em; width:220px; border-radius:12px; border:2px solid #ccc; text-align:center; }
+        .private-section button { padding:16px 40px; font-size:1.4em; margin-left:15px; }
+
+        #openRooms { display:grid; gap:22px; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); margin-top:50px; }
+        .room { background:var(--light); padding:28px; border-radius:16px; text-align:center;
+                box-shadow:0 6px 20px rgba(0,0,0.12); cursor:pointer; transition:.3s; }
+        .room:hover { transform:translateY(-10px); box-shadow:0 18px 40px rgba(0,0,0.25); }
+
+        #gameArea { display:none; gap:40px; flex-wrap:wrap; }
+        #gameArea.show { display:flex; }
+        .left { flex:1; min-width:340px; }
+        .right { width:380px; }
+        #board { width:540px; height:540px; margin:20px auto; border-radius:14px;
+                 box-shadow:0 18px 50px rgba(0,0,0.4); }
+        .players { display:flex; justify-content:center; gap:40px; margin-bottom:25px; }
+        .player { padding:22px; background:#f0f0f0; border-radius:18px; text-align:center;
+                  min-width:160px; border:5px solid transparent; transition:.3s; }
+        .player.active { border-color:var(--primary); transform:scale(1.12); }
+        .status { text-align:center; font-size:1.8em; font-weight:bold; padding:20px;
+                  background:white; border-radius:14px; margin-bottom:20px; }
+        .chat { background:var(--light); border-radius:16px; padding:20px; height:500px;
+                display:flex; flex-direction:column; }
+        #messages { flex:1; overflow-y:auto; }
+        .msg { margin:12px 0; padding:14px 20px; border-radius:22px; max-width:88%; word-wrap:break-word; }
+        .msg.me { background:var(--primary); color:white; margin-left:auto; }
+        .msg.them { background:#e9ecef; }
+        button.small { padding:12px 24px; margin:8px; border:none; border-radius:30px;
+                       background:var(--primary); color:white; cursor:pointer; font-size:1.1em; }
+        #promotionModal { display:none; position:fixed; inset:0; background:rgba(0,0,0.94);
+                          justify-content:center; align-items:center; z-index:1000; }
+        .promo-box { background:white; padding:50px; border-radius:30px; text-align:center; }
+        .promo-piece { font-size:6.5em; margin:0 30px; cursor:pointer; transition:.2s; }
+        .promo-piece:hover { transform:scale(1.3); }
+
+        @media (max-width:1024px) {
+            #board { width:92vw; height:92vw; max-width:480px; max-height:480px; }
+            #gameArea.show { flex-direction:column; }
+            .right { width:100%; }
         }
     </style>
 </head>
 <body>
-<div class="game-container">
-    <div class="left-column">
+<div class="container">
+    <div id="lobby">
         <h1>♔ CHESS ♛</h1>
-        <h2 style="text-align:center;color:#666;margin-bottom:20px;">Online Multiplayer • Chat • Random Colors</h2>
+        <h2>Public Lobby • Private 6-Digit Games • 100% Works on GitHub Pages</h2>
 
-        <div id="setupScreen">
-            <button id="createRoom">Create New Room</button><br><br>
-            <input type="text" id="roomInput" placeholder="Enter 6-digit code" maxlength="6">
-            <button id="joinRoom">Join Room</button>
-            <div id="roomInfo" style="display:none;"></div>
-            <div id="waiting" style="display:none;">Waiting for opponent...</div>
+        <div class="actions">
+            <button id="createPublic" class="big">Create Public Game</button>
+            <button id="createPrivate" class="big">Create Private Game</button>
         </div>
 
-        <div id="gameScreen" style="display:none;">
-            <div class="players-info">
-                <div class="player" id="white-player">
-                    <div class="player-name" contenteditable="true">White Player</div>
-                    <div class="player-piece">♔</div>
-                </div>
-                <div class="player" id="black-player">
-                    <div class="player-name" contenteditable="true">Black Player</div>
-                    <div class="player-piece">♛</div>
-                </div>
-            </div>
-            <div class="game-status" id="gameStatus">White's turn to move</div>
-            <div id="board"></div>
-            <div class="controls">
-                <button id="newGame">New Game</button>
-                <button id="undoBtn" disabled>Undo Last Move</button>
-                <button id="flipBoard">Flip Board</button>
-            </div>
-            <div class="notation">
-                <div id="moveHistory">No moves yet</div>
-            </div>
+        <div class="private-section">
+            <input type="text" id="privateCode" placeholder="Enter 6-digit code" maxlength="6" placeholder="e.g. 483921">
+            <button id="joinPrivate" class="big">Join Private Game</button>
         </div>
+
+        <h3 style="margin-top:60px;">Public Games</h3>
+        <div id="openRooms"><p><i>Loading…</i></p></div>
     </div>
 
-    <div class="right-column" id="chatColumn" style="display:none;">
-        <div class="chat-box">
-            <div id="chatMessages"></div>
-            <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
+    <div id="gameArea">
+        <div class="left">
+            <div class="players">
+                <div class="player" id="white"><div contenteditable>White</div><div style="font-size:3.4em">♔</div></div>
+                <div class="player" id="black"><div contenteditable>Black</div><div style="font-size:3.4em">♛</div></div>
+            </div>
+            <div class="status" id="status">Waiting for opponent...</div>
+            <div id="board"></div>
+            <div style="text-align:center; margin:30px 0;">
+                <button class="small" id="newGame">New Game</button>
+                <button class="small" id="undoBtn" disabled>Undo Move</button>
+                <button class="small" id="flip">Flip Board</button>
+            </div>
+            <div style="font-family:monospace; background:#f5f5f5; padding:16px; border-radius:14px;" id="moveHistory">No moves yet</div>
+        </div>
+        <div class="right">
+            <div class="chat">
+                <div id="messages"></div>
+                <input id="chatInput" placeholder="Type a message..." autocomplete="off"
+                       style="margin-top:15px; padding:15px; border-radius:30px; border:2px solid #ddd; width:100%; font-size:1.1em;">
+            </div>
         </div>
     </div>
 </div>
 
 <div id="promotionModal">
-    <div class="modal-content">
-        <h3>Promote your pawn!</h3>
-        <div>
-            <span class="promotion-piece" data-piece="q">♕</span>
-            <span class="promotion-piece" data-piece="r">♖</span>
-            <span class="promotion-piece" data-piece="b">♗</span>
-            <span class="promotion-piece" data-piece="n">♘</span>
-        </div>
+    <div class="promo-box">
+        <h3>Promote to:</h3>
+        <span class="promo-piece" data-p="q">♕</span>
+        <span class="promo-piece" data-p="r">♖</span>
+        <span class="promo-piece" data-p="b">♗</span>
+        <span class="promo-piece" data-p="n">♘</span>
     </div>
 </div>
 
 <script>
-let board = null;
-let game = new Chess();
-let peer = null;
-let conn = null;
-let myColor = null;
-let pendingMove = null;
-let isHost = false;
+    const PUBLIC_LOBBY_KEY = 'chess_public_games_v4';
+    let board = null, game = new Chess(), peer = null, conn = null, myColor = null, pendingMove = null;
+    let currentRoomId = null;
 
-const $status = $('#gameStatus');
-const $undoBtn = $('#undoBtn');
-const $modal = $('#promotionModal');
-const $chatMessages = $('#chatMessages');
-const $chatInput = $('#chatInput');
-const $moveHistory = $('#moveHistory');
+    // ========= PUBLIC LOBBY (localStorage) =========
+    function refreshLobby() {
+        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
+        const now = Date.now();
 
-// ===== 6-DIGIT ROOM CODES =====
-function generateRoomCode() {
-    return String(Math.floor(100000 + Math.random() * 900000)); // 100000–999999
-}
+        // Clean old games
+        Object.keys(games).forEach(id => {
+            if (now - games[id].created > 8*60*1000) delete games[id];
+        });
+        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
 
-// ====================== BOARD ======================
-function initBoard(orientation = 'white') {
-    if (board) board.destroy();
-    const config = {
-        draggable: true,
-        position: 'start',
-        orientation: orientation,
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-        onDragStart: onDragStart,
-        onDrop: onDrop,
-        onSnapEnd: () => board.position(game.fen())
-    };
-    board = Chessboard('board', config);
-    board.position(game.fen());
-    $('#chatColumn').show();
-    updateAll();
-}
+        const list = $('#openRooms');
+        list.empty();
 
-function onDragStart(source, piece) {
-    if (!myColor || game.game_over() || game.turn() !== myColor ||
-        (myColor === 'w' && piece.search(/^b/) !== -1) ||
-        (myColor === 'b' && piece.search(/^w/) !== -1)) {
-        return false;
-    }
-}
+        const entries = Object.entries(games)
+            .filter(([,g]) => now - g.created < 8*60*1000)
+            .sort((a,b) => b[1].created - a[1].created);
 
-function onDrop(source, target) {
-    pendingMove = { from: source, to: target };
-    let move = game.move({ from: source, to: target, promotion: 'q' });
-    if (move === null) {
-        pendingMove = null;
-        return 'snapback';
-    }
-    if (move.flags.includes('p')) {
-        game.undo();
-        showPromotionModal();
-        return;
-    }
-    finalizeMove(move);
-}
-
-function showPromotionModal() {
-    $modal.show();
-    $modal.find('.promotion-piece').off('click').on('click', function() {
-        const promotion = $(this).data('piece');
-        const move = game.move({ ...pendingMove, promotion });
-        finalizeMove(move);
-        $modal.hide();
-        pendingMove = null;
-    });
-}
-
-function finalizeMove(move) {
-    board.position(game.fen(), false);
-    if (conn && conn.open) {
-        conn.send({ type: 'move', fen: game.fen() });
-    }
-    updateAll();
-}
-
-// ====================== UI UPDATES ======================
-function updateAll() {
-    updateStatus();
-    updateActivePlayer();
-    updateMoveHistoryDisplay();   // Fixed: now properly shows full history
-    updateUndoButton();
-    board.draggable = myColor && !game.game_over() && game.turn() === myColor;
-}
-
-function updateStatus() {
-    let status = '';
-    if (game.in_checkmate()) {
-        const winner = game.turn() === 'w' ? 'Black' : 'White';
-        status = `Checkmate! ${winner} wins!`;
-        $status.html(`<span style="color:#e91e63;">${status}</span>`);
-    } else if (game.in_draw()) {
-        status = 'Draw!';
-        $status.html(`<span style="color:#ff9800;">${status}</span>`);
-    } else {
-        const turn = game.turn() === 'w' ? 'White' : 'Black';
-        status = `${turn}'s turn`;
-        if (game.in_check()) status += ` — ${turn} is in check!`;
-        $status.text(status);
-    }
-}
-
-function updateActivePlayer() {
-    $('#white-player').toggleClass('active', game.turn() === 'w');
-    $('#black-player').toggleClass('active', game.turn() === 'b');
-}
-
-function updateMoveHistoryDisplay() {
-    const history = game.history({ verbose: false });
-    let html = '';
-    for (let i = 0; i < history.length; i += 2) {
-        const moveNum = Math.floor(i / 2) + 1;
-        html += `${moveNum}. ${history[i]}`;
-        if (i + 1 < history.length) html += ` ${history[i + 1]}`;
-        if (i + 2 < history.length) html += ' | ';
-    }
-    $moveHistory.text(html || 'No moves yet');
-}
-
-function updateUndoButton() {
-    $undoBtn.prop('disabled', game.history().length < 2 || game.game_over());
-}
-
-// ====================== CHAT ======================
-function addMessage(text, fromMe = false) {
-    const el = $('<div class="message">')
-        .text(text)
-        .addClass(fromMe ? 'me' : 'opponent');
-    $chatMessages.append(el);
-    $chatMessages.scrollTop($chatMessages[0].scrollHeight);
-}
-
-$chatInput.keypress(function(e) {
-    if (e.which === 13 && this.value.trim()) {
-        const msg = this.value.trim();
-        addMessage(msg, true);
-        if (conn && conn.open) conn.send({ type: 'chat', text: msg });
-        this.value = '';
-    }
-});
-
-// ====================== RANDOM COLORS ======================
-function assignRandomColors() {
-    const seed = peer.id.localeCompare(conn.peer) < 0 ? peer.id + conn.peer : conn.peer + peer.id;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-        hash |= 0;
-    }
-    const hostIsWhite = (Math.abs(hash) % 2) === 0;
-    const hostColor = hostIsWhite ? 'w' : 'b';
-    const guestColor = hostIsWhite ? 'b' : 'w';
-    conn.send({ type: 'color', color: guestColor });
-    myColor = hostColor;
-    initBoard(myColor === 'w' ? 'white' : 'black');
-    addMessage(`Random colors assigned — You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
-}
-
-// ====================== PEERJS WITH 6-DIGIT CODES ======================
-$('#createRoom').click(() => {
-    isHost = true;
-    const roomCode = generateRoomCode();
-    peer = new Peer(roomCode); // Use 6-digit code as PeerID
-    peer.on('open', id => {
-        $('#roomInfo').text(`Room Code: ${id}`).show();
-        $('#waiting').show();
-    });
-    peer.on('connection', c => {
-        conn = c;
-        setupConnection();
-    });
-    peer.on('error', err => console.error(err));
-});
-
-$('#joinRoom').click(() => {
-    let code = $('#roomInput').val().trim();
-    if (!/^\d{6}$/.test(code)) return alert('Please enter a valid 6-digit code');
-    peer = new Peer();
-    peer.on('open', () => {
-        conn = peer.connect(code);
-        setupConnection();
-    });
-});
-
-function setupConnection() {
-    conn.on('open', () => {
-        $('#setupScreen').hide();
-        $('#gameScreen').show();
-        $('#waiting').hide();
-        if (isHost) {
-            setTimeout(assignRandomColors, 700);
+        if (entries.length === 0) {
+            list.html('<p><i>No public games right now — create one!</i></p>');
+            return;
         }
+
+        entries.forEach(([id, g]) => {
+            const age = Math.round((now - g.created)/60000);
+            const card = $(`
+                <div class="room" data-id="${id}">
+                    <h3>${g.name || 'Player'}'s Game</h3>
+                    <small>${age === 0 ? 'Just now' : age + ' min ago'}</small>
+                </div>
+            `);
+            card.click(() => joinPublic(id));
+            list.append(card);
+        });
+    }
+
+    function addToPublicLobby(id, name) {
+        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
+        games[id] = { name: name || 'Player', created: Date.now() };
+        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
+        currentRoomId = id;
+    }
+
+    function removeFromPublicLobby(id) {
+        let games = JSON.parse(localStorage.getItem(PUBLIC_LOBBY_KEY) || '{}');
+        delete games[id];
+        localStorage.setItem(PUBLIC_LOBBY_KEY, JSON.stringify(games));
+    }
+
+    setInterval(refreshLobby, 9000);
+    window.addEventListener('storage', refreshLobby);
+    refreshLobby(); // initial load
+
+    // ========= BUTTONS =========
+    $('#createPublic').click(() => {
+        const name = prompt('Your name (optional)') || 'Player';
+        peer = new Peer();
+        peer.on('open', id => {
+            addToPublicLobby(id, name);
+            setupHost();
+        });
     });
 
-    conn.on('data', data => {
-        if (data.type === 'color') {
-            myColor = data.color;
-            initBoard(myColor === 'w' ? 'white' : 'black');
-            addMessage(`Game started — You are ${myColor === 'w' ? 'White ♔' : 'Black ♛'}`, false);
-        }
-        else if (data.type === 'move') {
-            game.load(data.fen);
-            board.position(game.fen(), true);
-            updateAll(); // This now correctly preserves move history
-        }
-        else if (data.type === 'reset') {
-            game.reset();
-            board.position('start');
-            updateAll();
-            if (isHost) setTimeout(assignRandomColors, 700);
-        }
-        else if (data.type === 'chat') {
-            addMessage(data.text, false);
-        }
+    function joinPublic(hostId) {
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(hostId);
+            removeFromPublicLobby(hostId);
+            setupConnection(false);
+        });
+    }
+
+    $('#createPrivate').click(() => {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        peer = new Peer(code);
+        peer.on('open', id => {
+            alert(`Private Game Created!\n\nShare this code:\n\n${code}`);
+            setupHost();
+        });
+        peer.on('error', err => {
+            if (err.type === 'unavailable-id') {
+                alert('Code taken — trying a new one...');
+                $('#createPrivate').click();
+            }
+        });
     });
 
-    conn.on('close', () => {
-        alert('Opponent disconnected');
-        location.reload();
+    $('#joinPrivate').click(() => {
+        const code = $('#privateCode').val().trim();
+        if (!/^\d{6}$/.test(code)) {
+            alert('Enter a valid 6-digit code');
+            return;
+        }
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(code);
+            setupConnection(false);
+        });
+        peer.on('error', () => alert('Invalid code or player left'));
     });
-}
 
-// ====================== BUTTONS ======================
-$('#newGame').click(() => {
-    if (confirm('Start a new game?')) {
-        game.reset();
-        board.position('start');
-        if (conn && conn.open) conn.send({ type: 'reset' });
+    // ========= GAME CORE =========
+    function setupHost() {
+        peer.on('connection', inc => {
+            conn = inc;
+            setupConnection(true);
+            if (currentRoomId) removeFromPublicLobby(currentRoomId);
+        });
+        $('#lobby').hide();
+        $('#gameArea').addClass('show');
+        $('#status').text('Waiting for opponent...');
+    }
+
+    function setupConnection(isHost) {
+        conn.on('open', () => {
+            $('#lobby').hide();
+            $('#gameArea').addClass('show');
+
+            if (isHost) {
+                const hostWhite = Math.random() < 0.5;
+                myColor = hostWhite ? 'w' : 'b';
+                conn.send({ type: 'color', color: hostWhite ? 'b' : 'w' });
+            }
+
+            initBoard();
+            addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White ♔':'Black ♛'}` : 'Waiting...'));
+        });
+
+        conn.on('data', data => {
+            if (data.type === 'color') {
+                myColor = data.color;
+                initBoard();
+                addMsg(`You are ${myColor==='w'?'White ♔':'Black ♛'}`);
+            }
+            if (data.type === 'move') {
+                game.load(data.fen);
+                board.position(game.fen());
+                updateAll();
+            }
+            if (data.type === 'chat') addMsg(data.text, false);
+            if (data.type === 'reset') { game.reset(); board.start(); updateAll(); }
+        });
+
+        conn.on('close', () => {
+            alert('Opponent disconnected');
+            location.reload();
+        });
+    }
+
+    function initBoard() {
+        if (board) board.destroy();
+        board = Chessboard('board', {
+            draggable: true,
+            position: 'start',
+            orientation: myColor === 'w' ? 'white' : 'black',
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+            onDragStart: (src, piece) => !game.game_over() && game.turn() === myColor && piece.search(myColor === 'w' ? /^b/ : /^w/) === -1,
+            onDrop: handleDrop,
+            onSnapEnd: () => board.position(game.fen())
+        });
         updateAll();
     }
-});
 
-$('#undoBtn').click(() => {
-    if (game.history().length < 2) return;
-    game.undo(); game.undo();
-    board.position(game.fen());
-    if (conn && conn.open) conn.send({ type: 'move', fen: game.fen() });
-    updateAll();
-});
+    function handleDrop(src, tgt) {
+        pendingMove = {from: src, to: tgt};
+        const move = game.move({from: src, to: tgt, promotion: 'q'});
+        if (!move) return 'snapback';
 
-$('#flipBoard').click(() => board.flip());
+        if (move.flags.includes('p')) {
+            game.undo();
+            $('#promotionModal').show();
+            $('.promo-piece').off().one('click', function() {
+                const p = $(this).data('p');
+                game.move({...pendingMove, promotion: p});
+                sendMove();
+                $('#promotionModal').hide();
+            });
+            return;
+        }
+        sendMove();
+    }
+
+    function sendMove() {
+        if (conn) conn.send({type: 'move', fen: game.fen()});
+        updateAll();
+    }
+
+    function updateAll() {
+        let txt = game.in_checkmate() ? `Checkmate! ${game.turn()==='w'?'Black':'White'} wins!`
+                 : game.in_draw() ? 'Draw!'
+                 : (game.turn()==='w'?'White':'Black') + "'s turn" + (game.in_check()?' (check)' : '');
+
+        $('#status').text(txt);
+        $('#white').toggleClass('active', game.turn() === 'w');
+        $('#black').toggleClass('active', game.turn() === 'b');
+        $('#undoBtn').prop('disabled', game.history().length < 2 || game.game_over());
+
+        const h = game.history();
+        let hist = '';
+        for (let i = 0; i < h.length; i += 2) hist += `${Math.floor(i/2)+1}. ${h[i]} ${i+1 < h.length ? h[i+1] : ''}  `;
+        $('#moveHistory').text(hist || 'No moves yet');
+    }
+
+    function addMsg(text, me = true) {
+        const el = $('<div class="msg">').text(text).addClass(me ? 'me' : 'them');
+        $('#messages').append(el).scrollTop(1e9);
+        if (me && conn) conn.send({type: 'chat', text});
+    }
+
+    $('#chatInput').on('keypress', e => {
+        if (e.which === 13 && this.value.trim()) {
+            addMsg(this.value);
+            this.value = '';
+        }
+    });
+
+    $('#newGame').click(() => confirm('New game?') && (game.reset(), board.start(), conn?.send({type:'reset'}), updateAll()));
+    $('#undoBtn').click(() => {
+        if (game.history().length >= 2) {
+            game.undo(); game.undo();
+            board.position(game.fen());
+            conn?.send({type: 'move', fen: game.fen()});
+            updateAll();
+        }
+    });
+    $('#flip').click(() => board.flip());
+
+    // Start lobby refresh
+    refreshLobby();
 </script>
 </body>
 </html>
