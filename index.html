@@ -119,53 +119,88 @@
 </div>
 
 <script>
-    // === Matchmaking using a fixed lightweight "broker" peer ===
-    const MATCHMAKER_ID = 'chess-matchmaker-2025'; // fixed public ID (anyone can use it)
-    let matchmaker = null;
-    let waitingHosts = []; // only used by clients looking for random game
+    // ========== CONFIG – CHANGE THESE TWO LINES ONLY ==========
+    const GITHUB_TOKEN = 'github_pat_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // ← your token here
+    const MATCHMAKER_REPO = 'yourusername/chess-matchmaker';  // ← your repo
+    const MATCHMAKER_RAW = `https://raw.githubusercontent.com/${MATCHMAKER_REPO}/main/games.json`;
+    const MATCHMAKER_API = `https://api.github.com/repos/${MATCHMAKER_REPO}/contents/games.json`;
+    // ==========================================================
 
-    let board = null, game = new Chess(), peer = null, conn = null, myColor = null, pendingMove = null;
-    let myName = 'Player';
-
-    // ================== MATCHMAKING HELPERS ==================
-    function connectToMatchmaker() {
-        if (matchmaker) return matchmaker;
-        matchmaker = new Peer();
-        matchmaker.on('open', () => console.log('Connected to PeerJS broker'));
-        matchmaker.on('error', err => console.error('Matchmaker error:', err));
-        return matchmaker;
+    async function loadWaitingGames() {
+        const res = await fetch(MATCHMAKER_RAW + '?t=' + Date.now());
+        return await res.json().catch(() => ({}));
     }
 
-    // Host registers itself as waiting
-    function registerAsWaiting(hostPeerId) {
-        const mm = connectToMatchmaker();
-        const c = mm.connect(MATCHMAKER_ID);
-        c.on('open', () => {
-            c.send({ type: 'register', id: hostPeerId });
-            // Keep alive every 15s
-            const keepAlive = setInterval(() => c.send({ type: 'ping' }), 15000);
-            // Clean up on close
-            c.on('close', () => clearInterval(keepAlive));
+    async function saveWaitingGames(data) {
+        const current = await fetch(MATCHMAKER_API).then(r => r.json());
+        await fetch(MATCHMAKER_API, {
+            method: 'PUT',
+            headers: {
+                Authorization: 'token ' + GITHUB_TOKEN,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: 'update waiting games',
+                content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+                sha: current.sha,
+                branch: 'main'
+            })
         });
     }
 
-    // Client asks matchmaker for a random waiting host
-    function findRandomOpponent() {
+    async function registerMyself(hostId) {
+        const games = await loadWaitingGames();
+        games[hostId] = Date.now();
+        await saveWaitingGames(games);
+        localStorage.setItem('myPublicGameId', hostId);
+    }
+
+    async function findRandomOpponent() {
         $('#joinRandom').prop('disabled', true).text('Searching...');
-        const mm = connectToMatchmaker();
-        const c = mm.connect(MATCHMAKER_ID);
-        c.on('open', () => {
-            c.send({ type: 'find' });
+        let games = await loadWaitingGames();
+        const myId = localStorage.getItem('myPublicGameId');
+        const available = Object.keys(games).filter(id => id !== myId);
+        if (available.length === 0) {
+            alert('No open games right now');
+            $('#joinRandom').prop('disabled', false).text('Join Random Game');
+            return;
+        }
+        const chosen = available[Math.floor(Math.random() * available.length)];
+        delete games[chosen];
+        await saveWaitingGames(games).catch(() => {}); // fire and forget
+        joinPublicGame(chosen);
+    }
+
+    // When creating public game
+    $('#createPublic').click(() => {
+        peer = new Peer();
+        peer.on('open', id => {
+            registerMyself(id);
+            setupHost();
+            $('#status').text('Waiting for opponent (public game active)');
         });
-        c.on('data', data => {
-            c.close();
-            if (data && data.id) {
-                joinPublicGame(data.id);
-            } else {
-                alert('No open games right now — try again in a few seconds!');
-                $('#joinRandom').prop('disabled', false).text('Join Random Game');
-            }
+    });
+
+    $('#joinRandom').click(findRandomOpponent);
+
+    function joinPublicGame(hostId) {
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(hostId);
+            setupConnection(false);
         });
+    }
+
+    // Remove yourself when leaving
+    window.addEventListener('beforeunload', async () => {
+        const myId = localStorage.getItem('myPublicGameId');
+        if (myId) {
+            const games = await loadWaitingGames();
+            delete games[myId];
+            localStorage.removeItem('myPublicGameId');
+            saveWaitingGames(games).catch(() => {});
+        }
+    });
     }
 
     // ================== BUTTONS ==================
