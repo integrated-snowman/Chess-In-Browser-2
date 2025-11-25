@@ -119,9 +119,12 @@
 </div>
 
 <script>
+    // Global variables (add these at the top)
+    let peer, conn, myColor, board, game, myName = 'Player';
+
     // ========== CONFIG – CHANGE THESE TWO LINES ONLY ==========
     const GITHUB_TOKEN = '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'; // ← your token here
-    const MATCHMAKER_REPO = 'integrated-snowman/chess-matchmaker/games.json';  // ← your repo
+    const MATCHMAKER_REPO = 'integrated-snowman/chess-matchmaker/games.json'; // ← your repo
     const MATCHMAKER_RAW = `https://raw.githubusercontent.com/${MATCHMAKER_REPO}/main/games.json`;
     const MATCHMAKER_API = `https://api.github.com/repos/${MATCHMAKER_REPO}/contents/games.json`;
     // ==========================================================
@@ -132,23 +135,27 @@
     }
 
     async function saveWaitingGames(data) {
-        const current = await fetch(MATCHMAKER_API).then(r => r.json());
-        await fetch(MATCHMAKER_API, {
-            method: 'PUT',
-            headers: {
-                Authorization: 'token ' + GITHUB_TOKEN,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: 'update waiting games',
-                content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
-                sha: current.sha,
-                branch: 'main'
-            })
-        });
+        try {
+            const current = await fetch(MATCHMAKER_API).then(r => r.json());
+            await fetch(MATCHMAKER_API, {
+                method: 'PUT',
+                headers: {
+                    Authorization: 'token ' + GITHUB_TOKEN,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: 'update waiting games',
+                    content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
+                    sha: current.sha,
+                    branch: 'main'
+                })
+            });
+        } catch (err) {
+            console.error('Failed to save games:', err);
+        }
     }
 
-    async function registerMyself(hostId) {
+    async function registerMyself(hostId) {  // Renamed for consistency (was registerAsWaiting in one place)
         const games = await loadWaitingGames();
         games[hostId] = Date.now();
         await saveWaitingGames(games);
@@ -171,53 +178,6 @@
         joinPublicGame(chosen);
     }
 
-    // When creating public game
-    $('#createPublic').click(() => {
-        peer = new Peer();
-        peer.on('open', id => {
-            registerMyself(id);
-            setupHost();
-            $('#status').text('Waiting for opponent (public game active)');
-        });
-    });
-
-    $('#joinRandom').click(findRandomOpponent);
-
-    function joinPublicGame(hostId) {
-        peer = new Peer();
-        peer.on('open', () => {
-            conn = peer.connect(hostId);
-            setupConnection(false);
-        });
-    }
-
-    // Remove yourself when leaving
-    window.addEventListener('beforeunload', async () => {
-        const myId = localStorage.getItem('myPublicGameId');
-        if (myId) {
-            const games = await loadWaitingGames();
-            delete games[myId];
-            localStorage.removeItem('myPublicGameId');
-            saveWaitingGames(games).catch(() => {});
-        }
-    });
-    }
-
-    // ================== BUTTONS ==================
-    $('#createPublic').click(() => {
-        myName = prompt('Your name (optional)', myName) || myName;
-        peer = new Peer(); // random ID
-        peer.on('open', id => {
-            registerAsWaiting(id);
-            setupHost();
-            $('#status').text('Waiting for random opponent...');
-        });
-    });
-
-    $('#joinRandom').click(() => {
-        findRandomOpponent();
-    });
-
     function joinPublicGame(hostId) {
         peer = new Peer();
         peer.on('open', () => {
@@ -231,6 +191,31 @@
         });
     }
 
+    // Remove yourself when leaving
+    window.addEventListener('beforeunload', async () => {
+        const myId = localStorage.getItem('myPublicGameId');
+        if (myId) {
+            const games = await loadWaitingGames();
+            delete games[myId];
+            localStorage.removeItem('myPublicGameId');
+            saveWaitingGames(games).catch(() => {});
+        }
+    });
+
+    // ================== BUTTONS ==================
+    $('#createPublic').click(() => {
+        myName = prompt('Your name (optional)', myName) || myName;
+        peer = new Peer(); // random ID
+        peer.on('open', id => {
+            registerMyself(id);  // Fixed: was registerAsWaiting
+            setupHost();
+            $('#status').text('Waiting for opponent (public game active)');
+        });
+        peer.on('error', err => console.error('Peer error:', err));
+    });
+
+    $('#joinRandom').click(findRandomOpponent);
+
     $('#createPrivate').click(() => {
         const code = String(Math.floor(100000 + Math.random() * 900000));
         peer = new Peer(code);
@@ -242,6 +227,8 @@
             if (err.type === 'unavailable-id') {
                 alert('Code taken — trying again...');
                 $('#createPrivate').click();
+            } else {
+                console.error(err);
             }
         });
     });
@@ -257,7 +244,7 @@
         peer.on('error', () => alert('Invalid code or game no longer exists'));
     });
 
-    // ================== GAME CORE (unchanged) ==================
+    // ================== GAME CORE ==================
     function setupHost() {
         peer.on('connection', inc => {
             conn = inc;
@@ -272,7 +259,6 @@
         conn.on('open', () => {
             $('#lobby').hide();
             $('#gameArea').addClass('show');
-
             if (isHost) {
                 const hostWhite = Math.random() < 0.5;
                 myColor = hostWhite ? 'w' : 'b';
@@ -281,7 +267,6 @@
             initBoard();
             addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White ♔':'Black ♛'}` : 'Assigning color...'));
         });
-
         conn.on('data', data => {
             if (data.type === 'color') {
                 myColor = data.color;
@@ -294,17 +279,22 @@
                 updateAll();
             }
             if (data.type === 'chat') addMsg(data.text, false);
-            if (data.type === 'reset') { game.reset(); board.start(); updateAll(); }
+            if (data.type === 'reset') { 
+                game.reset(); 
+                board.start(); 
+                updateAll(); 
+            }
         });
-
         conn.on('close', () => {
             alert('Opponent disconnected');
             location.reload();
         });
     }
 
+    let pendingMove;  // For promotion handling
     function initBoard() {
         if (board) board.destroy();
+        game = new Chess();  // Initialize chess game
         board = Chessboard('board', {
             draggable: true,
             position: 'start',
@@ -348,7 +338,6 @@
         $('#white').toggleClass('active', game.turn() === 'w');
         $('#black').toggleClass('active', game.turn() === 'b');
         $('#undoBtn').prop('disabled', game.history().length < 2 || game.game_over());
-
         const h = game.history({verbose:true});
         let hist = '';
         for (let i = 0; i < h.length; i += 2) {
@@ -372,6 +361,7 @@
     });
 
     $('#newGame').click(() => confirm('Start a new game?') && (game.reset(), board.start(), conn?.send({type:'reset'}), updateAll()));
+
     $('#undoBtn').click(() => {
         if (game.history().length >= 2) {
             game.undo(); game.undo();
@@ -380,6 +370,7 @@
             updateAll();
         }
     });
+
     $('#flip').click(() => board.flip());
 </script>
 </body>
