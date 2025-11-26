@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>♔ Chess Online • Random Matchmaking • GitHub Pages</title>
+    <title>Chess Online • Private Games Only</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -26,10 +26,9 @@
                      background:var(--primary); color:white; box-shadow:0 10px 30px rgba(76,175,80,0.5);
                      transition:all .3s; }
         button.big:hover { transform:translateY(-5px); box-shadow:0 18px 40px rgba(76,175,80,0.7); }
-        button.big:disabled { background:#999; cursor:not-allowed; transform:none; }
 
-        .private-section { margin:40px auto; max-width:500px; text-align:center; }
-        .private-section input { padding:16px; font-size:1.4em; width:220px; border-radius:12px; border:2px solid #ccc; text-align:center; }
+        .private-section { margin:40px auto; max-width:600px; text-align:center; }
+        .private-section input { padding:16px; font-size:1.4em; width:240px; border-radius:12px; border:2px solid #ccc; text-align:center; }
         .private-section button { padding:16px 40px; font-size:1.4em; margin-left:15px; }
 
         #gameArea { display:none; gap:40px; flex-wrap:wrap; }
@@ -68,26 +67,24 @@
 <body>
 <div class="container">
     <div id="lobby">
-        <h1>♔ CHESS ♛</h1>
-        <h2>Random Matchmaking • Private 6-Digit Games • 100% GitHub Pages</h2>
+        <h1>Chess</h1>
+        <h2>Private Games • 6-Digit Code • Works on GitHub Pages</h2>
 
         <div class="actions">
-            <button id="createPublic" class="big">Create Public Game</button>
-            <button id="joinRandom" class="big">Join Random Game</button>
             <button id="createPrivate" class="big">Create Private Game</button>
         </div>
 
         <div class="private-section">
             <input type="text" id="privateCode" placeholder="Enter 6-digit code" maxlength="6">
-            <button id="joinPrivate" class="big">Join Private Game</button>
+            <button id="joinPrivate" class="big">Join Game</button>
         </div>
     </div>
 
     <div id="gameArea">
         <div class="left">
             <div class="players">
-                <div class="player" id="white"><div contenteditable>White</div><div style="font-size:3.4em">♔</div></div>
-                <div class="player" id="black"><div contenteditable>Black</div><div style="font-size:3.4em">♛</div></div>
+                <div class="player" id="white"><div contenteditable>White</div><div style="font-size:3.4em">White King</div></div>
+                <div class="player" id="black"><div contenteditable>Black</div><div style="font-size:3.4em">Black King</div></div>
             </div>
             <div class="status" id="status">Waiting for opponent...</div>
             <div id="board"></div>
@@ -111,108 +108,27 @@
 <div id="promotionModal">
     <div class="promo-box">
         <h3>Promote to:</h3>
-        <span class="promo-piece" data-p="q">♕</span>
-        <span class="promo-piece" data-p="r">♖</span>
-        <span class="promo-piece" data-p="b">♗</span>
-        <span class="promo-piece" data-p="n">♘</span>
+        <span class="promo-piece" data-p="q">Queen</span>
+        <span class="promo-piece" data-p="r">Rook</span>
+        <span class="promo-piece" data-p="b">Bishop</span>
+        <span class="promo-piece" data-p="n">Knight</span>
     </div>
 </div>
 
 <script>
-// REMOVE ALL GITHUB TOKEN / MATCHMAKER CODE (delete lines with GITHUB_TOKEN, loadWaitingGames, saveWaitingGames, etc.)
+    let board = null, game = new Chess(), peer = null, conn = null, myColor = null, pendingMove = null;
 
-// NEW: Shared public lobby room (anyone looking for random opponent uses this same ID)
-const PUBLIC_LOBBY_ID = 'chess-public-random-2025'; // Everyone connects here
-
-let peer, conn, myColor, board, game, myName = 'Player';
-let isHost = false;
-
-$('#createPublic').click(() => {
-    myName = prompt('Your name (optional)', myName) || myName;
-    createOrJoinPublic();
-});
-
-$('#joinRandom').click(() => {
-    createOrJoinPublic();
-});
-
-function createOrJoinPublic() {
-    $('#createPublic, #joinRandom').prop('disabled', true).text('Searching...');
-
-    peer = new Peer(); // Let PeerJS assign random ID
-    peer.on('open', (myId) => {
-        // Everyone connects to the same fixed lobby ID
-        conn = peer.connect(PUBLIC_LOBBY_ID);
-        
-        conn.on('open', () => {
-            isHost = false;
-            onConnected();
-        });
-
-        // Also listen for incoming connections (in case we're first)
-        peer.on('connection', (incoming) => {
-            if (!conn || conn.peer === PUBLIC_LOBBY_ID) {
-                conn = incoming;
-                isHost = true;
-                conn.on('open', onConnected);
-            }
-        });
-
-        // If no one connects within 2 seconds, become host and wait
-        setTimeout(() => {
-            if (!conn || !conn.open) {
-                conn = peer.connect(PUBLIC_LOBBY_ID); // retry as host
-                isHost = true;
-            }
-        }, 2000);
-    });
-
-    peer.on('error', (err) => {
-        console.error(err);
-        alert('Connection failed. Try again!');
-        $('#createPublic, #joinRandom').prop('disabled', false).text('Create Public Game');
-    });
-}
-
-function onConnected() {
-    $('#lobby').hide();
-    $('#gameArea').addClass('show');
-    $('#status').text('Connected! Assigning colors...');
-
-    setupConnection(isHost);
-    
-    // Remove searching UI
-    $('#createPublic, #joinRandom').prop('disabled', false).text('Create Public Game');
-}
-
-// Keep everything else exactly the same from setupConnection() downward
-// (your existing setupConnection, initBoard, handleDrop, chat, etc. all work perfectly
-
-
-    // ================== BUTTONS ==================
-    $('#createPublic').click(() => {
-        myName = prompt('Your name (optional)', myName) || myName;
-        peer = new Peer(); // random ID
-        peer.on('open', id => {
-            registerMyself(id);  // Fixed: was registerAsWaiting
-            setupHost();
-            $('#status').text('Waiting for opponent (public game active)');
-        });
-        peer.on('error', err => console.error('Peer error:', err));
-    });
-
-    $('#joinRandom').click(findRandomOpponent);
-
+    // ========= PRIVATE GAMES ONLY =========
     $('#createPrivate').click(() => {
         const code = String(Math.floor(100000 + Math.random() * 900000));
         peer = new Peer(code);
-        peer.on('open', () => {
-            alert(`Private Game Created!\n\nShare this code: ${code}`);
+        peer.on('open', id => {
+            alert(`Private Game Created!\n\nShare this code with your friend:\n\n${code}`);
             setupHost();
         });
         peer.on('error', err => {
             if (err.type === 'unavailable-id') {
-                alert('Code taken — trying again...');
+                alert('This code is already taken — generating a new one...');
                 $('#createPrivate').click();
             } else {
                 console.error(err);
@@ -222,16 +138,22 @@ function onConnected() {
 
     $('#joinPrivate').click(() => {
         const code = $('#privateCode').val().trim();
-        if (!/^\d{6}$/.test(code)) return alert('Enter a valid 6-digit code');
+        if (!/^\d{6}$/.test(code)) {
+            alert('Please enter a valid 6-digit code');
+            return;
+        }
         peer = new Peer();
         peer.on('open', () => {
             conn = peer.connect(code);
             setupConnection(false);
         });
-        peer.on('error', () => alert('Invalid code or game no longer exists'));
+        peer.on('error', err => {
+            if (err.type === 'peer-unavailable') {
+                alert('Invalid code or the host is no longer online');
+            }
+        });
     });
 
-    // ================== GAME CORE ==================
     function setupHost() {
         peer.on('connection', inc => {
             conn = inc;
@@ -246,19 +168,22 @@ function onConnected() {
         conn.on('open', () => {
             $('#lobby').hide();
             $('#gameArea').addClass('show');
+
             if (isHost) {
                 const hostWhite = Math.random() < 0.5;
                 myColor = hostWhite ? 'w' : 'b';
                 conn.send({ type: 'color', color: hostWhite ? 'b' : 'w' });
             }
+
             initBoard();
-            addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White ♔':'Black ♛'}` : 'Assigning color...'));
+            addMsg('Connected! ' + (myColor ? `You are ${myColor==='w'?'White White King':'Black Black King'}` : 'Assigning color...'));
         });
+
         conn.on('data', data => {
             if (data.type === 'color') {
                 myColor = data.color;
                 initBoard();
-                addMsg(`You are ${myColor==='w'?'White ♔':'Black ♛'}`);
+                addMsg(`You are ${myColor==='w'?'White White King':'Black Black King'}`);
             }
             if (data.type === 'move') {
                 game.load(data.fen);
@@ -266,22 +191,17 @@ function onConnected() {
                 updateAll();
             }
             if (data.type === 'chat') addMsg(data.text, false);
-            if (data.type === 'reset') { 
-                game.reset(); 
-                board.start(); 
-                updateAll(); 
-            }
+            if (data.type === 'reset') { game.reset(); board.start(); updateAll(); }
         });
+
         conn.on('close', () => {
             alert('Opponent disconnected');
             location.reload();
         });
     }
 
-    let pendingMove;  // For promotion handling
     function initBoard() {
         if (board) board.destroy();
-        game = new Chess();  // Initialize chess game
         board = Chessboard('board', {
             draggable: true,
             position: 'start',
@@ -298,6 +218,7 @@ function onConnected() {
         pendingMove = {from: src, to: tgt};
         const move = game.move({from: src, to: tgt, promotion: 'q'});
         if (!move) return 'snapback';
+
         if (move.flags.includes('p')) {
             game.undo();
             $('#promotionModal').show();
@@ -321,17 +242,18 @@ function onConnected() {
         let txt = game.in_checkmate() ? `Checkmate! ${game.turn()==='w'?'Black':'White'} wins!`
                  : game.in_draw() ? 'Draw!'
                  : (game.turn()==='w'?'White':'Black') + "'s turn" + (game.in_check()?' (check)' : '');
+
         $('#status').text(txt);
         $('#white').toggleClass('active', game.turn() === 'w');
         $('#black').toggleClass('active', game.turn() === 'b');
         $('#undoBtn').prop('disabled', game.history().length < 2 || game.game_over());
-        const h = game.history({verbose:true});
+
+        const h = game.history({ verbose: true });
         let hist = '';
         for (let i = 0; i < h.length; i += 2) {
-            hist += `${Math.floor(i/2)+1}. ${h[i].san}`;
-            if (i+1 < h.length) hist += ` ${h[i+1].san} `;
+            hist += `${Math.floor(i/2)+1}. ${h[i].san}${i+1 < h.length ? ' ' + h[i+1].san : ''}  `;
         }
-        $('#moveHistory').text(hist || 'No moves yet');
+        $('#moveHistory').text(hist.trim() || 'No moves yet');
     }
 
     function addMsg(text, me = true) {
@@ -341,13 +263,20 @@ function onConnected() {
     }
 
     $('#chatInput').on('keypress', e => {
-        if (e.which === 13 && this.value.trim()) {
-            addMsg(this.value);
-            this.value = '';
+        if (e.which === 13 && $('#chatInput').val().trim()) {
+            addMsg($('#chatInput').val());
+            $('#chatInput').val('');
         }
     });
 
-    $('#newGame').click(() => confirm('Start a new game?') && (game.reset(), board.start(), conn?.send({type:'reset'}), updateAll()));
+    $('#newGame').click(() => {
+        if (confirm('Start a new game?')) {
+            game.reset();
+            board.start();
+            if (conn) conn.send({type:'reset'});
+            updateAll();
+        }
+    });
 
     $('#undoBtn').click(() => {
         if (game.history().length >= 2) {
