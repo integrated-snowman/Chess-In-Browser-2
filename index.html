@@ -119,88 +119,75 @@
 </div>
 
 <script>
-    // Global variables (add these at the top)
-    let peer, conn, myColor, board, game, myName = 'Player';
+// REMOVE ALL GITHUB TOKEN / MATCHMAKER CODE (delete lines with GITHUB_TOKEN, loadWaitingGames, saveWaitingGames, etc.)
 
-    // ========== CONFIG – CHANGE THESE TWO LINES ONLY ==========
-    const GITHUB_TOKEN = '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'; // ← your token here
-    const MATCHMAKER_REPO = 'integrated-snowman/chess-matchmaker/games.json'; // ← your repo
-    const MATCHMAKER_RAW = `https://raw.githubusercontent.com/${MATCHMAKER_REPO}/main/games.json`;
-    const MATCHMAKER_API = `https://api.github.com/repos/${MATCHMAKER_REPO}/contents/games.json`;
-    // ==========================================================
+// NEW: Shared public lobby room (anyone looking for random opponent uses this same ID)
+const PUBLIC_LOBBY_ID = 'chess-public-random-2025'; // Everyone connects here
 
-    async function loadWaitingGames() {
-        const res = await fetch(MATCHMAKER_RAW + '?t=' + Date.now());
-        return await res.json().catch(() => ({}));
-    }
+let peer, conn, myColor, board, game, myName = 'Player';
+let isHost = false;
 
-    async function saveWaitingGames(data) {
-        try {
-            const current = await fetch(MATCHMAKER_API).then(r => r.json());
-            await fetch(MATCHMAKER_API, {
-                method: 'PUT',
-                headers: {
-                    Authorization: 'token ' + GITHUB_TOKEN,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: 'update waiting games',
-                    content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
-                    sha: current.sha,
-                    branch: 'main'
-                })
-            });
-        } catch (err) {
-            console.error('Failed to save games:', err);
-        }
-    }
+$('#createPublic').click(() => {
+    myName = prompt('Your name (optional)', myName) || myName;
+    createOrJoinPublic();
+});
 
-    async function registerMyself(hostId) {  // Renamed for consistency (was registerAsWaiting in one place)
-        const games = await loadWaitingGames();
-        games[hostId] = Date.now();
-        await saveWaitingGames(games);
-        localStorage.setItem('myPublicGameId', hostId);
-    }
+$('#joinRandom').click(() => {
+    createOrJoinPublic();
+});
 
-    async function findRandomOpponent() {
-        $('#joinRandom').prop('disabled', true).text('Searching...');
-        let games = await loadWaitingGames();
-        const myId = localStorage.getItem('myPublicGameId');
-        const available = Object.keys(games).filter(id => id !== myId);
-        if (available.length === 0) {
-            alert('No open games right now');
-            $('#joinRandom').prop('disabled', false).text('Join Random Game');
-            return;
-        }
-        const chosen = available[Math.floor(Math.random() * available.length)];
-        delete games[chosen];
-        await saveWaitingGames(games).catch(() => {}); // fire and forget
-        joinPublicGame(chosen);
-    }
+function createOrJoinPublic() {
+    $('#createPublic, #joinRandom').prop('disabled', true).text('Searching...');
 
-    function joinPublicGame(hostId) {
-        peer = new Peer();
-        peer.on('open', () => {
-            conn = peer.connect(hostId);
-            setupConnection(false);
+    peer = new Peer(); // Let PeerJS assign random ID
+    peer.on('open', (myId) => {
+        // Everyone connects to the same fixed lobby ID
+        conn = peer.connect(PUBLIC_LOBBY_ID);
+        
+        conn.on('open', () => {
+            isHost = false;
+            onConnected();
         });
-        peer.on('error', err => {
-            console.error(err);
-            alert('Could not connect — game may have already started');
-            $('#joinRandom').prop('disabled', false).text('Join Random Game');
-        });
-    }
 
-    // Remove yourself when leaving
-    window.addEventListener('beforeunload', async () => {
-        const myId = localStorage.getItem('myPublicGameId');
-        if (myId) {
-            const games = await loadWaitingGames();
-            delete games[myId];
-            localStorage.removeItem('myPublicGameId');
-            saveWaitingGames(games).catch(() => {});
-        }
+        // Also listen for incoming connections (in case we're first)
+        peer.on('connection', (incoming) => {
+            if (!conn || conn.peer === PUBLIC_LOBBY_ID) {
+                conn = incoming;
+                isHost = true;
+                conn.on('open', onConnected);
+            }
+        });
+
+        // If no one connects within 2 seconds, become host and wait
+        setTimeout(() => {
+            if (!conn || !conn.open) {
+                conn = peer.connect(PUBLIC_LOBBY_ID); // retry as host
+                isHost = true;
+            }
+        }, 2000);
     });
+
+    peer.on('error', (err) => {
+        console.error(err);
+        alert('Connection failed. Try again!');
+        $('#createPublic, #joinRandom').prop('disabled', false).text('Create Public Game');
+    });
+}
+
+function onConnected() {
+    $('#lobby').hide();
+    $('#gameArea').addClass('show');
+    $('#status').text('Connected! Assigning colors...');
+
+    setupConnection(isHost);
+    
+    // Remove searching UI
+    $('#createPublic, #joinRandom').prop('disabled', false).text('Create Public Game');
+}
+
+// Keep everything else exactly the same from setupConnection() downward
+// (your existing setupConnection, initBoard, handleDrop, chat, etc. all work perfectly
+
 
     // ================== BUTTONS ==================
     $('#createPublic').click(() => {
