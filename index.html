@@ -206,7 +206,7 @@
             draggable: true,
             position: 'start',
             orientation: myColor === 'w' ? 'white' : 'black',
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+            pieceTheme: 'https://cdn.jsdelivr.net/npm/chessboardjs@1.0.0/img/chesspieces/wikipedia/{piece}.png',
             onDragStart: (src, piece) => !game.game_over() && game.turn() === myColor && piece.search(myColor === 'w' ? /^b/ : /^w/) === -1,
             onDrop: handleDrop,
             onSnapEnd: () => board.position(game.fen())
